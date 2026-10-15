@@ -1,0 +1,102 @@
+{
+  "name": "Error Handler Workflow",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "github/review-error",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "error-webhook",
+      "name": "Workflow Error Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.body.errorType }}",
+              "operation": "equals",
+              "value2": "authentication"
+            }
+          ]
+        }
+      },
+      "id": "route-error",
+      "name": "Classify Error",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "message": "The review workflow failed. Action required: check credentials, webhook signature validation, and GitHub permissions."
+      },
+      "id": "notify-team",
+      "name": "Notify Operators",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        180,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "message": "A retry is scheduled for the next review attempt."
+      },
+      "id": "schedule-retry",
+      "name": "Retry Queue",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        180,
+        180
+      ]
+    }
+  ],
+  "connections": {
+    "Workflow Error Webhook": {
+      "main": [
+        [
+          {
+            "node": "Classify Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Error": {
+      "main": [
+        [
+          {
+            "node": "Notify Operators",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Retry Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

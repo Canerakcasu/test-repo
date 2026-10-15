@@ -1,0 +1,143 @@
+{
+  "name": "Main Review Workflow",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "triggerCount": 1,
+  "tags": [
+    "github",
+    "review",
+    "security"
+  ],
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "github/pr-review",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "GitHub PR Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/{{ $json.body.repository.full_name }}/pulls/{{ $json.body.pull_request.number }}/files",
+        "options": {
+          "response": {
+            "responseFormat": "json"
+          }
+        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi"
+      },
+      "id": "fetch-pr-files",
+      "name": "Fetch PR Files",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -40,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const files = $input.all();\nconst changedFiles = files.map((item) => ({\n  filename: item.json.filename,\n  patch: item.json.patch || '',\n  status: item.json.status\n}));\nreturn changedFiles;"
+      },
+      "id": "normalize-files",
+      "name": "Normalize Files",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        180,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "prompt": "You are a senior security and code review assistant. Review the provided code diff and report:\n- vulnerabilities\n- code quality issues\n- maintainability concerns\n- severity and confidence\n- actionable remediation steps\n\nReturn results as JSON with fields: summary, findings, severity, confidence, and suggestions.",
+        "model": "={{ $env.MODEL_NAME }}",
+        "options": {
+          "responseFormat": "json_object"
+        }
+      },
+      "id": "ai-review",
+      "name": "AI Review",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/{{ $json.body.repository.full_name }}/pulls/{{ $json.body.pull_request.number }}/comments",
+        "method": "POST",
+        "bodyParameters": {
+          "body": "={{ $json.reviewSummary }}"
+        }
+      },
+      "id": "post-review-comment",
+      "name": "Post Review Comment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        620,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "GitHub PR Webhook": {
+      "main": [
+        [
+          {
+            "node": "Fetch PR Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch PR Files": {
+      "main": [
+        [
+          {
+            "node": "Normalize Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Files": {
+      "main": [
+        [
+          {
+            "node": "AI Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Review": {
+      "main": [
+        [
+          {
+            "node": "Post Review Comment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
